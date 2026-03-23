@@ -1,0 +1,246 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ─── Auth ───
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  githubId      String?   @unique
+  username      String?
+
+  accounts      Account[]
+  sessions      Session[]
+  repositories  Repository[]
+  conversations Conversation[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── Repositories ───
+
+enum RepoStatus {
+  PENDING
+  INGESTING
+  READY
+  ERROR
+  STALE
+}
+
+model Repository {
+  id            String     @id @default(cuid())
+  userId        String
+  githubRepoId  Int
+  fullName      String
+  name          String
+  owner         String
+  description   String?    @db.Text
+  defaultBranch String     @default("main")
+  language      String?
+  stars         Int        @default(0)
+  isPrivate     Boolean    @default(false)
+  status        RepoStatus @default(PENDING)
+  lastSyncedAt  DateTime?
+  totalChunks   Int        @default(0)
+  totalFiles    Int        @default(0)
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeChunks    CodeChunk[]
+  conversations Conversation[]
+  jobs          Job[]
+  analyses      AnalysisResult[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, githubRepoId])
+  @@index([userId])
+}
+
+// ─── Code Chunks & Embeddings ───
+
+enum ChunkType {
+  FUNCTION
+  CLASS
+  INTERFACE
+  TYPE
+  IMPORT
+  EXPORT
+  BLOCK
+  FILE_HEADER
+  COMMENT
+  OTHER
+}
+
+model CodeChunk {
+  id        String    @id @default(cuid())
+  repoId    String
+  filePath  String
+  startLine Int
+  endLine   Int
+  chunkType ChunkType @default(OTHER)
+  content   String    @db.Text
+  language  String
+  summary   String?   @db.Text
+
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  embedding  Embedding?
+
+  createdAt DateTime @default(now())
+
+  @@index([repoId])
+  @@index([repoId, filePath])
+}
+
+model Embedding {
+  id           String                       @id @default(cuid())
+  chunkId      String                       @unique
+  embedding    Unsupported("vector(768)")
+  modelVersion String                       @default("text-embedding-004")
+
+  chunk CodeChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([chunkId])
+}
+
+// ─── Conversations ───
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model Conversation {
+  id     String @id @default(cuid())
+  userId String
+  repoId String
+  title  String @default("New conversation")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  messages   Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([repoId])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String      @db.Text
+  contextChunks  String[]
+  tokenCount     Int         @default(0)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+// ─── Analysis Results (cached) ───
+
+enum AnalysisType {
+  CODE_REVIEW
+  BUG_EXPLANATION
+  DOCUMENTATION
+}
+
+model AnalysisResult {
+  id       String       @id @default(cuid())
+  repoId   String
+  type     AnalysisType
+  filePath String?
+  prNumber Int?
+  input    String       @db.Text
+  result   String       @db.Text
+
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([repoId, type])
+}
+
+// ─── Background Jobs ───
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum JobType {
+  REPO_CLONE
+  CHUNK_FILES
+  GENERATE_EMBEDDINGS
+  FULL_INGESTION
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  repoId    String
+  type      JobType
+  status    JobStatus @default(QUEUED)
+  progress  Int       @default(0)
+  total     Int       @default(0)
+  error     String?   @db.Text
+  metadata  Json?
+  startedAt DateTime?
+  completedAt DateTime?
+
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([repoId])
+  @@index([status])
+}
