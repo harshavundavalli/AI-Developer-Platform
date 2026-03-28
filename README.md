@@ -1,172 +1,129 @@
-# AI Developer Productivity Platform
+# AI Developer Platform
 
-AI-powered developer productivity platform that integrates with GitHub to automate code review, bug explanation, documentation generation, and natural-language repository Q&A.
+An AI-powered platform that lets developers connect their GitHub repositories and query them using natural language. Built with RAG (Retrieval Augmented Generation) — your questions are answered using the actual source code as context.
 
-**100% free-tier stack** — $0/month to run.
+**Live Demo:** https://ai-developer-platform.vercel.app
+
+---
+
+## What it does
+
+- **Connect GitHub repos** — sign in with GitHub and see all your repositories
+- **Ingest & embed** — files are chunked and embedded using HuggingFace's `sentence-transformers/all-mpnet-base-v2` model, stored as vectors in PostgreSQL
+- **Ask questions** — chat with your codebase using natural language. Answers are grounded in real code with file paths and line numbers
+- **AI analysis** — auto-generate code reviews, documentation, architecture overviews, and explanations for any ingested repo
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14 (App Router) |
-| Database | PostgreSQL 16 + pgvector |
-| LLM | Google Gemini 2.0 Flash (free) |
-| Embeddings | Gemini text-embedding-004 (768d) |
+|---|---|
+| Framework | Next.js 14 (App Router) |
 | Auth | NextAuth.js + GitHub OAuth |
-| Queue | BullMQ + Redis |
-| Hosting | Vercel (free) + Railway (free) |
-| CI/CD | GitHub Actions |
+| Database | PostgreSQL + pgvector (Supabase) |
+| Cache | Redis (Upstash) |
+| ORM | Prisma |
+| LLM | HuggingFace `Qwen/Qwen2.5-72B-Instruct` |
+| Embeddings | HuggingFace `sentence-transformers/all-mpnet-base-v2` (768-dim) |
+| Hosting | Vercel |
+| Styling | Tailwind CSS |
 
-## Features
+---
 
-- **Repository Q&A** — Ask natural-language questions, get answers grounded in your actual code
-- **AI Code Review** — Paste code and get severity-rated issues with fix suggestions
-- **Bug Explanation** — Paste errors/stack traces and get root cause analysis
-- **Documentation Generation** — Auto-generate JSDoc, module docs, or README sections
-- **RAG Pipeline** — Code is chunked, embedded, and retrieved via vector similarity search
+## How it works
 
-## Prerequisites
+1. **Ingestion** — when you click "Ingest" on a repo, the pipeline fetches all files from GitHub, splits them into semantic chunks (language-aware), generates 768-dimensional embeddings via HuggingFace, and stores them in pgvector
+2. **Retrieval** — when you ask a question, it's embedded using the same model, then a cosine similarity search finds the most relevant code chunks
+3. **Generation** — the retrieved chunks are injected as context into the LLM prompt. The model streams its response back via Server-Sent Events (SSE)
 
-- Node.js 20+
-- Docker Desktop
-- GitHub account
-- Google Gemini API key (free from [ai.google.dev](https://ai.google.dev))
+---
 
-## Quick Start
+## Local Development
 
-### 1. Clone and install
+**Prerequisites:** Node.js 18+, PostgreSQL with pgvector, Redis
 
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-dev-platform.git
-cd ai-dev-platform
-npm install
-```
+1. Clone the repo
+   ```bash
+   git clone https://github.com/harshavundavalli/AI-Developer-Platform
+   cd AI-Developer-Platform
+   ```
 
-### 2. Set up environment variables
+2. Install dependencies
+   ```bash
+   npm install
+   ```
 
-```bash
-cp .env.example .env
-```
+3. Create a `.env.local` file for local overrides:
+   ```
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aidevplatform
+   DIRECT_URL=postgresql://postgres:postgres@localhost:5432/aidevplatform
+   REDIS_URL=redis://localhost:6379
+   NEXTAUTH_URL=http://localhost:3000
+   ```
 
-Edit `.env` and fill in:
+4. Fill in your API keys in `.env`:
+   ```
+   GITHUB_CLIENT_ID=your_github_oauth_client_id
+   GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
+   NEXTAUTH_SECRET=your_random_secret        # openssl rand -base64 32
+   HUGGINGFACE_API_KEY=your_hf_token
+   ```
 
-- `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` — Create a [GitHub OAuth App](https://github.com/settings/developers)
-  - Homepage URL: `http://localhost:3000`
-  - Callback URL: `http://localhost:3000/api/auth/callback/github`
-- `GEMINI_API_KEY` — Get free from [Google AI Studio](https://ai.google.dev)
-- `NEXTAUTH_SECRET` — Generate with `openssl rand -base64 32`
+5. Set up the database
+   ```bash
+   npx prisma db push
+   ```
 
-### 3. Start local services
+6. Run the dev server
+   ```bash
+   npm run dev
+   ```
 
-```bash
-docker compose up -d
-```
+---
 
-This starts PostgreSQL (with pgvector) and Redis.
+## Deployment
 
-### 4. Set up database
+Deployed on **Vercel + Supabase + Upstash** — 100% free.
 
-```bash
-npx prisma generate
-npx prisma db push
-```
+| Service | Purpose | Free Tier |
+|---|---|---|
+| Vercel | Next.js hosting | Unlimited deploys |
+| Supabase | PostgreSQL + pgvector | 500MB storage |
+| Upstash | Redis | 10k commands/day |
 
-### 5. Run the app
+### Steps
+1. Push code to GitHub
+2. Create a Supabase project, enable pgvector, run `npx prisma db push`
+3. Create an Upstash Redis database
+4. Import repo on Vercel, add all environment variables, deploy
+5. Update GitHub OAuth app callback URL to your Vercel domain
 
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) and sign in with GitHub.
+---
 
 ## Project Structure
 
 ```
 src/
-├── app/                    # Next.js App Router
-│   ├── api/                # API routes
-│   │   ├── auth/           # NextAuth endpoints
-│   │   ├── repos/          # Repository CRUD + ingestion
-│   │   └── conversations/  # Chat history
-│   ├── (auth)/             # Login page
-│   └── (dashboard)/        # Authenticated pages
-│       ├── repos/          # Repository list
-│       ├── chat/           # Chat interface
-│       └── settings/       # Settings page
-├── components/             # React components
-├── lib/                    # Core business logic
-│   ├── auth/               # NextAuth config
-│   ├── db/                 # Prisma + pgvector helpers
-│   ├── ingestion/          # GitHub API, chunking, pipeline
-│   ├── embedding/          # Gemini embedding service
-│   ├── retrieval/          # Vector search + context assembly
-│   ├── analysis/           # LLM analysis (review, explain, docs)
-│   ├── llm/                # LLM provider abstraction (Gemini)
-│   └── utils/              # Shared utilities
+├── app/
+│   ├── (dashboard)/        # Protected pages (repos, chat, analysis)
+│   ├── api/                # API routes (auth, repos, conversations)
+│   └── login/              # Login page
+├── components/             # Reusable UI components
+├── lib/
+│   ├── auth/               # NextAuth config, session helpers
+│   ├── db/                 # Prisma client
+│   ├── ingestion/          # GitHub fetching, chunking, pipeline
+│   ├── llm/                # HuggingFace + Gemini provider abstraction
+│   ├── retrieval/          # Vector search (pgvector cosine similarity)
+│   └── analysis/           # Code review, docs, overview generation
 └── types/                  # TypeScript type definitions
+prisma/
+└── schema.prisma           # Database schema with pgvector extension
 ```
 
-## Architecture
-
-### RAG Pipeline
-
-1. **Ingest** — Clone repo via GitHub API, walk file tree
-2. **Chunk** — Split code into semantic chunks (functions, classes, blocks)
-3. **Embed** — Generate 768-dim vectors via Gemini text-embedding-004
-4. **Store** — Save vectors in PostgreSQL/pgvector
-5. **Query** — Embed user question → similarity search → retrieve top-K chunks
-6. **Generate** — Send chunks as context to Gemini Flash → stream response
-
-### Module Boundaries
-
-Each `src/lib/*` module has a clean interface and maps to a future microservice:
-
-- `auth` → Auth Service
-- `ingestion` → Ingestion Service
-- `embedding` → Embedding Service
-- `retrieval` → Retrieval Service
-- `analysis` → Analysis Service
-- `llm` → LLM Gateway
-
-## Deployment
-
-### Vercel (Frontend + API)
-
-1. Connect your GitHub repo to [Vercel](https://vercel.com)
-2. Add environment variables in Vercel dashboard
-3. Deploy — automatic on push to `main`
-
-### Railway (Database + Redis)
-
-1. Create a [Railway](https://railway.app) project
-2. Add PostgreSQL service (pgvector extension is auto-available)
-3. Add Redis service
-4. Copy connection strings to Vercel env vars
-
-### Database Migrations (Production)
-
-```bash
-npx prisma migrate deploy
-```
-
-## Testing
-
-```bash
-npm run test        # Watch mode
-npm run test:run    # Single run
-```
-
-## Free Tier Limits
-
-| Service | Limit |
-|---------|-------|
-| Gemini API | 15 RPM, 1,500 req/day |
-| Vercel Hobby | 100 GB bandwidth |
-| Railway PG | 500 MB storage |
-| Railway Redis | 500 MB memory |
-| GitHub Actions | 2,000 min/month |
+---
 
 ## License
 
 MIT
-# AI-Developer-Platform
