@@ -1,5 +1,6 @@
 import { llm } from "@/lib/llm";
 import { retrieveContext, retrieveFileContext } from "@/lib/retrieval";
+import { prisma } from "@/lib/db";
 
 /**
  * Repository Q&A — answer a question grounded in codebase context.
@@ -115,6 +116,66 @@ Output in markdown format ready to be used directly.`;
   const prompt = `Generate ${level}-level documentation for ${filePath}:\n\n\`\`\`\n${code}\n\`\`\``;
 
   yield* llm.generateResponse(prompt, assembledContext, { systemPrompt });
+}
+
+/**
+ * Codebase Overview — explain the entire repository structure and architecture.
+ */
+export async function* generateOverview(repoId: string): AsyncGenerator<string> {
+  // Fetch all chunks grouped by file
+  const chunks = await prisma.codeChunk.findMany({
+    where: { repoId },
+    select: { filePath: true, chunkType: true, content: true, startLine: true },
+    orderBy: [{ filePath: "asc" }, { startLine: "asc" }],
+  });
+
+  if (chunks.length === 0) {
+    yield "No code chunks found for this repository. Please re-index it first.";
+    return;
+  }
+
+  // Group by file, keep up to 2 most meaningful chunks per file
+  const fileMap = new Map<string, typeof chunks>();
+  for (const chunk of chunks) {
+    if (!fileMap.has(chunk.filePath)) fileMap.set(chunk.filePath, []);
+    fileMap.get(chunk.filePath)!.push(chunk);
+  }
+
+  const fileSections = Array.from(fileMap.entries()).map(([filePath, fileChunks]) => {
+    // Prefer FUNCTION/CLASS chunks as they're most meaningful
+    const sorted = [...fileChunks].sort((a, b) => {
+      const priority = ["FUNCTION", "CLASS", "INTERFACE", "MODULE"];
+      return priority.indexOf(b.chunkType) - priority.indexOf(a.chunkType);
+    });
+    const preview = sorted
+      .slice(0, 2)
+      .map((c) => c.content.slice(0, 400))
+      .join("\n...\n");
+    const types = [...new Set(fileChunks.map((c) => c.chunkType))].join(", ");
+    return `### ${filePath} (${fileChunks.length} chunks: ${types})\n\`\`\`\n${preview}\n\`\`\``;
+  });
+
+  const context = fileSections.join("\n\n");
+
+  const systemPrompt = `You are a senior software architect. Analyze this entire codebase and provide a comprehensive explanation.
+
+Structure your response as:
+1. **Project Overview** — What this project does and its purpose
+2. **Tech Stack** — Languages, frameworks, databases used
+3. **Architecture** — How it's structured (layers, patterns)
+4. **Directory Structure** — What each folder/file is responsible for
+5. **Data Flow** — How data moves through the system end-to-end
+6. **Key Components** — The most important files and what they do
+7. **Entry Points** — Where execution starts, main API routes
+8. **Notable Patterns** — Design patterns and coding conventions used
+
+Be specific and reference actual file paths. Use clear markdown formatting.`;
+
+  yield* llm.generateResponse(
+    "Give a comprehensive explanation of this entire codebase.",
+    context,
+    { systemPrompt, maxTokens: 8192 }
+  );
 }
 
 /**

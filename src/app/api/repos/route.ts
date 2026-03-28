@@ -16,7 +16,19 @@ export async function GET() {
     }
 
     // Fetch repos from GitHub
-    const githubRepos = await fetchUserRepos(token);
+    let githubRepos;
+    try {
+      githubRepos = await fetchUserRepos(token);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("401")) {
+        return NextResponse.json(
+          { success: false, error: "GitHub token expired. Please sign out and sign back in." },
+          { status: 401 }
+        );
+      }
+      throw err;
+    }
 
     // Get tracked repos from our DB
     const trackedRepos = await prisma.repository.findMany({
@@ -56,8 +68,12 @@ export async function GET() {
     return NextResponse.json({ success: true, data: repos });
   } catch (err) {
     console.error("GET /api/repos error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch repositories";
+    if (message === "Unauthorized") {
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
+    }
     return NextResponse.json(
-      { success: false, error: "Failed to fetch repositories" },
+      { success: false, error: message },
       { status: 500 }
     );
   }

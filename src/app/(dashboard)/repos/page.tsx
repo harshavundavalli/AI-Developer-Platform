@@ -44,7 +44,7 @@ export default function ReposPage() {
         setError(data.error);
       }
     } catch {
-      setError("Failed to load repositories");
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }

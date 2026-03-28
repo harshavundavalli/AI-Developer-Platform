@@ -19,7 +19,8 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<{ fullName: string; status: string } | null>(null);
-  const [mode, setMode] = useState<"chat" | "review" | "explain" | "docs">("chat");
+  const [mode, setMode] = useState<"chat" | "review" | "explain" | "docs" | "overview">("chat");
+  const [overviewGenerated, setOverviewGenerated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -33,6 +34,50 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  async function handleOverview() {
+    if (isStreaming) return;
+    setIsStreaming(true);
+    setOverviewGenerated(true);
+    const assistantId = Date.now().toString();
+    setMessages([{ id: assistantId, role: "ASSISTANT", content: "" }]);
+
+    try {
+      const res = await fetch(`/api/repos/${repoId}/overview`, { method: "POST" });
+      if (!res.ok) throw new Error("Request failed");
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No stream");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const lines = decoder.decode(value, { stream: true }).split("\n");
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.text) {
+              setMessages((prev) =>
+                prev.map((m) => m.id === assistantId ? { ...m, content: m.content + data.text } : m)
+              );
+            }
+            if (data.error) {
+              setMessages((prev) =>
+                prev.map((m) => m.id === assistantId ? { ...m, content: `⚠️ Error: ${data.error}` } : m)
+              );
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) => ({ ...m, content: "Sorry, something went wrong. Please try again." }))
+      );
+    } finally {
+      setIsStreaming(false);
+    }
+  }
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -167,6 +212,7 @@ export default function ChatPage() {
                 { key: "review", label: "🔍 Review" },
                 { key: "explain", label: "🐛 Explain" },
                 { key: "docs", label: "📝 Docs" },
+                { key: "overview", label: "🗺️ Overview" },
               ] as const
             ).map((m) => (
               <button
@@ -192,7 +238,7 @@ export default function ChatPage() {
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-surface-700 flex items-center justify-center mb-6">
               <span className="text-3xl">
-                {mode === "chat" ? "💬" : mode === "review" ? "🔍" : mode === "explain" ? "🐛" : "📝"}
+                {mode === "chat" ? "💬" : mode === "review" ? "🔍" : mode === "explain" ? "🐛" : mode === "docs" ? "📝" : "🗺️"}
               </span>
             </div>
             <h2 className="text-xl font-semibold mb-2">
@@ -200,13 +246,24 @@ export default function ChatPage() {
               {mode === "review" && "AI Code Review"}
               {mode === "explain" && "Bug Explanation"}
               {mode === "docs" && "Documentation Generator"}
+              {mode === "overview" && "Codebase Overview"}
             </h2>
             <p className="text-surface-400 max-w-md text-sm">
               {mode === "chat" && "Ask questions about your repository. Answers are grounded in your actual code."}
               {mode === "review" && "Paste code and get an AI-powered review with severity ratings and fix suggestions."}
               {mode === "explain" && "Paste an error message or stack trace and get a clear explanation with fixes."}
               {mode === "docs" && "Paste code to auto-generate documentation with JSDoc, module overviews, or README sections."}
+              {mode === "overview" && "Generate a full explanation of every file, the architecture, data flow, and key patterns in this repository."}
             </p>
+            {mode === "overview" && (
+              <button
+                onClick={handleOverview}
+                disabled={isStreaming}
+                className="mt-6 px-6 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl text-sm font-medium hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+              >
+                🗺️ Generate Codebase Overview
+              </button>
+            )}
             {/* Starter prompts for chat mode */}
             {mode === "chat" && (
               <div className="mt-6 grid grid-cols-2 gap-2 max-w-lg">
@@ -276,11 +333,22 @@ export default function ChatPage() {
           </div>
         )}
 
+        {mode === "overview" && overviewGenerated && !isStreaming && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => { setMessages([]); setOverviewGenerated(false); }}
+              className="px-4 py-2 text-xs text-surface-400 border border-surface-700 rounded-lg hover:border-surface-500 hover:text-surface-200 transition-colors"
+            >
+              ↺ Regenerate Overview
+            </button>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="flex-shrink-0 border-t border-surface-800 p-4">
+      {/* Input — hidden in overview mode */}
+      <div className={cn("flex-shrink-0 border-t border-surface-800 p-4", mode === "overview" && "hidden")}>
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
           <div className="relative">
             <textarea
