@@ -37,6 +37,13 @@ export const authOptions: AuthOptions = {
             username: githubProfile.login,
           },
         });
+        // Always update the access token so stale tokens get refreshed on re-login
+        if (account.access_token) {
+          await prisma.account.updateMany({
+            where: { userId: user.id, provider: "github" },
+            data: { access_token: account.access_token },
+          });
+        }
       }
       return true;
     },
