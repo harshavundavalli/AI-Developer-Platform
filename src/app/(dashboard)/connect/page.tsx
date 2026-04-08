@@ -147,7 +147,7 @@ export default function ConnectPage() {
           <h2 className="text-sm font-semibold text-surface-200">Ingest a repository</h2>
         </div>
         <p className="text-sm text-surface-400 mb-3">
-          The MCP tools work on repos you've indexed. Go to Repositories, click Ingest on any repo, and wait for it to turn Ready.
+          The MCP tools work on repos you have indexed. Go to Repositories, click Ingest on any repo, and wait for it to turn Ready.
         </p>
         <Link
           href="/repos"

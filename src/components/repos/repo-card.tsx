@@ -69,6 +69,7 @@ export function RepoCard({ repo, jobId, onIngest, onIngestionComplete }: RepoCar
     poll();
     intervalRef.current = setInterval(poll, 2000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, repo.status]);
 
   const pct = jobProgress && jobProgress.total > 0
