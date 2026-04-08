@@ -1,7 +1,16 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { cn, formatRelativeTime, getLanguageColor } from "@/lib/utils";
+
+interface JobProgress {
+  status: string;
+  phase: string | null;
+  progress: number;
+  total: number;
+  error: string | null;
+}
 
 interface RepoCardProps {
   repo: {
@@ -19,7 +28,9 @@ interface RepoCardProps {
     totalChunks: number;
     totalFiles: number;
   };
+  jobId: string | null;
   onIngest: () => void;
+  onIngestionComplete?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -30,8 +41,39 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   STALE: { label: "Stale", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
 };
 
-export function RepoCard({ repo, onIngest }: RepoCardProps) {
+export function RepoCard({ repo, jobId, onIngest, onIngestionComplete }: RepoCardProps) {
   const status = repo.status ? statusConfig[repo.status] : null;
+  const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!jobId || repo.status !== "INGESTING") {
+      setJobProgress(null);
+      return;
+    }
+
+    async function poll() {
+      const res = await fetch(`/api/jobs/${jobId}`).catch(() => null);
+      if (!res?.ok) return;
+      const data = await res.json();
+      if (!data.success) return;
+
+      setJobProgress(data.data);
+
+      if (data.data.status === "COMPLETED" || data.data.status === "FAILED") {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        onIngestionComplete?.();
+      }
+    }
+
+    poll();
+    intervalRef.current = setInterval(poll, 2000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [jobId, repo.status]);
+
+  const pct = jobProgress && jobProgress.total > 0
+    ? Math.round((jobProgress.progress / jobProgress.total) * 100)
+    : null;
 
   return (
     <div className="glass rounded-xl p-5 hover:border-surface-600 transition-all group">
@@ -76,6 +118,29 @@ export function RepoCard({ repo, onIngest }: RepoCardProps) {
         )}
         <span>{formatRelativeTime(repo.updatedAt)}</span>
       </div>
+
+      {/* Progress bar (shown while ingesting with a jobId) */}
+      {repo.status === "INGESTING" && jobProgress && (
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-xs text-amber-400">{jobProgress.phase ?? "Starting..."}</span>
+            {pct !== null && (
+              <span className="text-xs text-surface-500">{pct}%</span>
+            )}
+          </div>
+          <div className="h-1.5 w-full bg-surface-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-400 rounded-full transition-all duration-500"
+              style={{ width: pct !== null ? `${pct}%` : "0%" }}
+            />
+          </div>
+          {jobProgress.total > 0 && (
+            <p className="mt-1 text-[10px] text-surface-600">
+              {jobProgress.progress} / {jobProgress.total}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Action row */}
       <div className="flex items-center justify-between">

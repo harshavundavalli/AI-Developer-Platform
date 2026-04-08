@@ -29,6 +29,7 @@ export default function ReposPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "ingested" | "pending">("all");
+  const [jobIds, setJobIds] = useState<Record<number, string>>({});
 
   useEffect(() => {
     fetchRepos();
@@ -69,7 +70,6 @@ export default function ReposPage() {
       });
       const data = await res.json();
       if (data.success) {
-        // Update local state
         setRepos((prev) =>
           prev.map((r) =>
             r.githubId === repo.githubId
@@ -77,6 +77,7 @@ export default function ReposPage() {
               : r
           )
         );
+        setJobIds((prev) => ({ ...prev, [repo.githubId]: data.data.jobId }));
       }
     } catch {
       console.error("Failed to start ingestion");
@@ -169,7 +170,9 @@ export default function ReposPage() {
             <RepoCard
               key={repo.githubId}
               repo={repo}
+              jobId={jobIds[repo.githubId] ?? null}
               onIngest={() => handleIngest(repo)}
+              onIngestionComplete={fetchRepos}
             />
           ))}
         </div>

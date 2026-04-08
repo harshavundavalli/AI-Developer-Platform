@@ -47,34 +47,36 @@ export async function ingestRepository(
 
     callbacks?.onProgress?.("Fetching file tree", 1, 1);
 
-    // ─── Phase 2: Fetch & chunk files ───
+    // ─── Phase 2: Fetch & chunk files (parallel with concurrency limit) ───
     const allChunks: CodeChunkData[] = [];
     let filesProcessed = 0;
+    const FETCH_CONCURRENCY = 10;
 
-    for (const file of processableFiles) {
+    const { owner, name, defaultBranch } = repo;
+
+    async function processFile(file: { path: string; size: number; sha: string; type: string }) {
       try {
         const content = await fetchFileContent(
           accessToken,
-          repo.owner,
-          repo.name,
+          owner,
+          name,
           file.path,
-          repo.defaultBranch
+          defaultBranch
         );
-
-        const chunks = chunkCode(content, file.path);
-        allChunks.push(...chunks);
+        return chunkCode(content, file.path);
       } catch (err) {
         console.warn(`Skipping ${file.path}: ${err}`);
+        return [];
       }
+    }
 
-      filesProcessed++;
-      if (filesProcessed % 10 === 0) {
-        callbacks?.onProgress?.(
-          "Processing files",
-          filesProcessed,
-          processableFiles.length
-        );
-      }
+    for (let i = 0; i < processableFiles.length; i += FETCH_CONCURRENCY) {
+      const batch = processableFiles.slice(i, i + FETCH_CONCURRENCY);
+      const results = await Promise.all(batch.map(processFile));
+      for (const chunks of results) allChunks.push(...chunks);
+
+      filesProcessed += batch.length;
+      callbacks?.onProgress?.("Processing files", filesProcessed, processableFiles.length);
     }
 
     callbacks?.onProgress?.(

@@ -42,9 +42,9 @@ export default function SettingsPage() {
         </h2>
         <div className="flex items-center justify-between">
           <div>
-            <div className="font-medium text-sm">Google Gemini (Free Tier)</div>
+            <div className="font-medium text-sm">HuggingFace Inference API</div>
             <div className="text-xs text-surface-500 mt-0.5">
-              15 requests/minute · 1,500 requests/day · gemini-2.0-flash
+              Qwen/Qwen2.5-72B-Instruct · sentence-transformers/all-mpnet-base-v2
             </div>
           </div>
           <span className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md">
@@ -62,9 +62,9 @@ export default function SettingsPage() {
           {[
             { label: "Frontend", value: "Next.js 14" },
             { label: "Database", value: "PostgreSQL + pgvector" },
-            { label: "Hosting", value: "Vercel + Railway" },
-            { label: "LLM", value: "Gemini 2.0 Flash" },
-            { label: "Embeddings", value: "text-embedding-004 (768d)" },
+            { label: "Hosting", value: "Vercel + Supabase" },
+            { label: "LLM", value: "Qwen2.5-72B-Instruct" },
+            { label: "Embeddings", value: "all-mpnet-base-v2 (768d)" },
             { label: "Version", value: "0.1.0" },
           ].map((item) => (
             <div key={item.label} className="flex justify-between py-2 border-b border-surface-800">
