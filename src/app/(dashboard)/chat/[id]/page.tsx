@@ -77,10 +77,12 @@ export default function ChatPage() {
           } catch { /* skip malformed */ }
         }
       }
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) => ({ ...m, content: "Sorry, something went wrong. Please try again." }))
-      );
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") {
+        setMessages((prev) =>
+          prev.map((m) => ({ ...m, content: "Sorry, something went wrong. Please try again." }))
+        );
+      }
     } finally {
       setIsStreaming(false);
     }
@@ -173,13 +175,15 @@ export default function ChatPage() {
         }
       }
     } catch (err) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: "Sorry, something went wrong. Please try again." }
-            : m
-        )
-      );
+      if ((err as Error)?.name !== "AbortError") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: "Sorry, something went wrong. Please try again." }
+              : m
+          )
+        );
+      }
     } finally {
       setIsStreaming(false);
     }

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ai-dev-platform": {
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "env": {
+        "MCP_USER_ID": "cmnqhy5ws0000l1046u84pxwz"
+      }
+    }
+  }
+}

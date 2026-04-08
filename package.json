@@ -18,11 +18,13 @@
     "db:studio": "prisma studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "setup": "npm install && npm run docker:up && sleep 3 && npm run db:push && npm run db:generate"
+    "setup": "npm install && npm run docker:up && sleep 3 && npm run db:push && npm run db:generate",
+    "mcp": "tsx mcp/server.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@huggingface/inference": "^4.13.15",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@prisma/client": "^6.1.0",
     "bullmq": "^5.30.0",
