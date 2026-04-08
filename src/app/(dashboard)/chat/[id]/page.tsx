@@ -23,6 +23,11 @@ export default function ChatPage() {
   const [overviewGenerated, setOverviewGenerated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  function stopStreaming() {
+    abortRef.current?.abort();
+  }
 
   useEffect(() => {
     fetch(`/api/repos/${repoId}/status`)
@@ -37,13 +42,15 @@ export default function ChatPage() {
 
   async function handleOverview() {
     if (isStreaming) return;
+    const abort = new AbortController();
+    abortRef.current = abort;
     setIsStreaming(true);
     setOverviewGenerated(true);
     const assistantId = Date.now().toString();
     setMessages([{ id: assistantId, role: "ASSISTANT", content: "" }]);
 
     try {
-      const res = await fetch(`/api/repos/${repoId}/overview`, { method: "POST" });
+      const res = await fetch(`/api/repos/${repoId}/overview`, { method: "POST", signal: abort.signal });
       if (!res.ok) throw new Error("Request failed");
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -84,6 +91,9 @@ export default function ChatPage() {
     const text = input.trim();
     if (!text || isStreaming) return;
 
+    const abort = new AbortController();
+    abortRef.current = abort;
+
     const userMsg: Message = { id: Date.now().toString(), role: "USER", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -115,6 +125,7 @@ export default function ChatPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: abort.signal,
       });
 
       if (!res.ok) throw new Error("Request failed");
@@ -333,23 +344,31 @@ export default function ChatPage() {
           </div>
         )}
 
-        {mode === "overview" && overviewGenerated && !isStreaming && (
-          <div className="flex justify-center">
-            <button
-              onClick={() => { setMessages([]); setOverviewGenerated(false); }}
-              className="px-4 py-2 text-xs text-surface-400 border border-surface-700 rounded-lg hover:border-surface-500 hover:text-surface-200 transition-colors"
-            >
-              ↺ Regenerate Overview
-            </button>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — hidden in overview mode */}
-      <div className={cn("flex-shrink-0 border-t border-surface-800 p-4", mode === "overview" && "hidden")}>
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+      {/* Input — replaced with generate button in overview mode */}
+      <div className={cn("flex-shrink-0 border-t border-surface-800 p-4", mode === "overview" && "flex items-center justify-center")}>
+        {mode === "overview" ? (
+          <div className="flex gap-3">
+            <button
+              onClick={handleOverview}
+              disabled={isStreaming}
+              className="px-6 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl text-sm font-medium hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+            >
+              {isStreaming ? "Generating..." : overviewGenerated ? "↺ Regenerate Overview" : "🗺️ Generate Codebase Overview"}
+            </button>
+            {isStreaming && (
+              <button
+                onClick={stopStreaming}
+                className="px-4 py-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-colors"
+              >
+                ■ Stop
+              </button>
+            )}
+          </div>
+        ) : null}
+        <form onSubmit={handleSubmit} className={cn("max-w-3xl mx-auto", mode === "overview" && "hidden")}>
           <div className="relative">
             <textarea
               ref={inputRef}
@@ -360,19 +379,32 @@ export default function ChatPage() {
               rows={mode === "chat" ? 1 : 4}
               className="w-full resize-none bg-surface-900/50 border border-surface-700 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 placeholder:text-surface-500"
             />
-            <button
-              type="submit"
-              disabled={!input.trim() || isStreaming}
-              className="absolute right-2 bottom-2 p-2 rounded-lg bg-blue-500 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={stopStreaming}
+                className="absolute right-2 bottom-2 p-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors"
+                title="Stop generating"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="absolute right-2 bottom-2 p-2 rounded-lg bg-blue-500 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            )}
           </div>
           <p className="mt-2 text-[10px] text-surface-600 text-center">
-            Powered by Google Gemini · Responses grounded in your repository code
+            Powered by HuggingFace · Responses grounded in your repository code
           </p>
         </form>
       </div>
