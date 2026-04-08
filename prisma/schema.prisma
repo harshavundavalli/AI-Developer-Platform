@@ -48,6 +48,7 @@ model User {
   image         String?
   githubId      String?   @unique
   username      String?
+  apiKey        String?   @unique
 
   accounts      Account[]
   sessions      Session[]

@@ -142,6 +142,26 @@ export function RepoCard({ repo, jobId, onIngest, onIngestionComplete }: RepoCar
         </div>
       )}
 
+      {/* MCP banner — shown when repo just finished ingesting this session */}
+      {repo.status === "READY" && jobId && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-3 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400 flex-shrink-0">
+              <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+            </svg>
+            <span className="text-xs text-purple-300 truncate">
+              Query this repo from your editor via MCP
+            </span>
+          </div>
+          <Link
+            href="/connect"
+            className="text-xs font-medium text-purple-400 hover:text-purple-300 whitespace-nowrap transition-colors"
+          >
+            Set up →
+          </Link>
+        </div>
+      )}
+
       {/* Action row */}
       <div className="flex items-center justify-between">
         {status ? (

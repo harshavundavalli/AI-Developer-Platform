@@ -48,7 +48,7 @@ export default async function HomePage() {
 
         {/* Features grid */}
         <div
-          className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl animate-slide-up"
+          className="mt-12 grid grid-cols-2 sm:grid-cols-5 gap-4 max-w-3xl animate-slide-up"
           style={{ animationDelay: "0.4s", animationFillMode: "both" }}
         >
           {[
@@ -56,6 +56,7 @@ export default async function HomePage() {
             { icon: "🐛", label: "Bug Explanation" },
             { icon: "📝", label: "Doc Generation" },
             { icon: "💬", label: "Repo Q&A" },
+            { icon: "⚡", label: "MCP Server" },
           ].map((f) => (
             <div
               key={f.label}
@@ -65,6 +66,19 @@ export default async function HomePage() {
               <div className="text-sm font-medium text-surface-300">{f.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* MCP callout */}
+        <div
+          className="mt-4 flex items-center gap-2 px-4 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl animate-slide-up"
+          style={{ animationDelay: "0.5s", animationFillMode: "both" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400 flex-shrink-0">
+            <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+          </svg>
+          <span className="text-sm text-purple-300">
+            Also available as an MCP server — query your repos directly from Claude Code
+          </span>
         </div>
 
         {/* CTA */}
